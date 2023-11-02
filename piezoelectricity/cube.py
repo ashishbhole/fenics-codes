@@ -27,6 +27,8 @@ import mechanical_properties as mp
 import electrical_properties as ep
 import argparse
 
+#parameters["form_compiler"]["precision"] = 100
+
 # get runtime arguments 
 parser = argparse.ArgumentParser()
 parser.add_argument('-deg', type=int, help='Enter degree', default=1)
@@ -153,7 +155,7 @@ w_top    = Constant((0.0, 0.0, 0.0, 0.0))
 w_right  = Constant((0.0, 0.0, 0.0, 0.0))
 w_here   = Constant((0.0, 0.0, 0.0, 0.0))
 w_there  = Constant((0.0, 0.0, 0.0, 0.0))
-w_bottom = Constant((0.0, 0.0, 0.0, 1.0))
+w_bottom = Constant((0.0, 0.0, 0.0, 0.0))
 w_top    = Constant((0.0, 0.0, 0.0, 0.0))
 
 bc_left   = DirichletBC(W, w_top,    Left())
@@ -184,7 +186,7 @@ if test_no == 1:
     bc1      = DirichletBC(W.sub(0), Constant((0.0, 0.0, 0.0)), p1, method="pointwise")
     bc22     = DirichletBC(W.split()[0].sub(1), Constant(0.0), p2, method="pointwise")
     bc23     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p2, method="pointwise")
-    bc43     = DirichletBC(W.split()[0].sub(0), Constant(0.0), p4, method="pointwise")
+    bc43     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p4, method="pointwise")
 
     bc1p     = DirichletBC(W.split()[1], Constant(1.0), p1, method="pointwise")
     bc2p     = DirichletBC(W.split()[1], Constant(1.0), p2, method="pointwise")
@@ -202,7 +204,7 @@ elif test_no == 2:
     bc1      = DirichletBC(W.sub(0), Constant((0.0, 0.0, 0.0)), p1, method="pointwise")
     bc22     = DirichletBC(W.split()[0].sub(1), Constant(0.0), p2, method="pointwise")
     bc23     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p2, method="pointwise")
-    bc43     = DirichletBC(W.split()[0].sub(0), Constant(0.0), p4, method="pointwise")
+    bc43     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p4, method="pointwise")
     
     bc1p     = DirichletBC(W.split()[1], Constant(0.0), p1, method="pointwise")
     bc2p     = DirichletBC(W.split()[1], Constant(0.0), p2, method="pointwise")
@@ -220,7 +222,7 @@ elif test_no == 3:
     bc1      = DirichletBC(W.sub(0), Constant((0.0, 0.0, 0.0)), p1, method="pointwise")
     bc22     = DirichletBC(W.split()[0].sub(1), Constant(0.0), p2, method="pointwise")
     bc23     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p2, method="pointwise")
-    bc43     = DirichletBC(W.split()[0].sub(0), Constant(0.0), p4, method="pointwise")
+    bc43     = DirichletBC(W.split()[0].sub(2), Constant(0.0), p4, method="pointwise")
 
     bc2p     = DirichletBC(W.split()[1], Constant(0.0), p2, method="pointwise")
     bc3p     = DirichletBC(W.split()[1], Constant(0.0), p3, method="pointwise")
@@ -293,7 +295,7 @@ def sigma_p(phi):
     return as_tensor( ep.Ephi[k,i,j] * grad(phi)[k], (i,j))
 
 def edisp_u(u):
-    return as_tensor( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i))
+    return as_tensor( ep.Ephi[i,k,l] * epsilon(u)[k,l], (i))
 
 # Electrostatic vector
 def edisp_p(phi):
@@ -304,7 +306,7 @@ def edisp_p(phi):
 (v, q)   = TestFunctions(W)
 
 # Body forces: source terms
-force = Constant((0, 0, 0))
+force = Constant((0, 0, 0)) # -mp.rho*9.8))
 # Charge: source term
 charge  = Constant(0)
 
@@ -328,19 +330,18 @@ gradphi_top    = Constant(0.0)
 gradphi_bottom = Constant(0.0)
 
 # bilinear and linear forms for the piezoelectric static problem
-a = inner(nabla_grad(v), sigma_u(u)   ) * dx \
+a =  inner(nabla_grad(v), sigma_u(u)   ) * dx \
 + inner(nabla_grad(v), sigma_p(phi) ) * dx   \
-+ inner(grad(q)      , edisp_u(u)   ) * dx   \
+- inner(grad(q)      , edisp_u(u)   ) * dx   \
 + inner(grad(q)      , edisp_p(phi) ) * dx
 
-L = dot(force, v) * dx \
+L = dot(force, v) * dx + q * charge * dx \
 + dot(traction_left,   v) * dsn(2) \
 + dot(traction_right,  v) * dsn(1) \
 + dot(traction_here,   v) * dsn(3) \
 + dot(traction_there,  v) * dsn(4) \
 + dot(traction_top,    v) * dsn(5) \
 + dot(traction_bottom, v) * dsn(6) \
-+ q * charge * dx       \
 + q * gradphi_left   * dsn(2) \
 + q * gradphi_right  * dsn(1) \
 + q * gradphi_here   * dsn(3) \
@@ -365,8 +366,8 @@ u.rename('u', 'u')
 phi.rename('phi', 'phi')
 
 # Save solution and some quantities to files in VTK format
-File('Displacement.pvd') << u
-File('Potential.pvd') << phi
+File('solution/Displacement.pvd') << u
+File('solution/Potential.pvd') << phi
 
 if deg > 1:
     VFS = VectorFunctionSpace(mesh, "CG", deg-1)
@@ -376,16 +377,15 @@ else:
     TVS = TensorFunctionSpace(mesh, "DG", 0)
 
 Ed = Function(VFS, name="Electrical_Displacement")
-q_vec = as_vector( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i))  \
-+ ep.dielectric_tensor * grad(phi)
+q_vec = as_vector( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i)) - ep.dielectric_tensor * grad(phi)
 Ed.assign(project(q_vec, VFS))
-File('Electrical_Displacement.pvd') << Ed
+File('solution/Electrical_Displacement.pvd') << Ed
 
 Ep = Function(VFS, name="Electric_Field")
 q_vec = - grad(phi)
 Ep.assign(project(q_vec, VFS))
-File('Electrical_Field.pvd') << Ep
+File('solution/Electrical_Field.pvd') << Ep
 
 Ms = Function(TVS, name="Mechanical_Strain")
 Ms.assign(project(0.5*(nabla_grad(u) + nabla_grad(u).T), TVS))
-File('Mechanical_Strain.pvd') << Ms
+File('solution/Mechanical_Strain.pvd') << Ms
