@@ -5,9 +5,6 @@
 
 The model is used to simulate an elastic beam clamped at
 its left end and deformed under its own weight.
-
-2) Thermodynamically consistent derivation and computation of electro-thermo-mechanical systems for solid bodies
-by B. E. Abali and F. A. Reich: Transformation from Voigt to Tensor notations.
 """
 
 from __future__ import print_function
@@ -74,12 +71,12 @@ here = Here()
 there = There()
 
 # flagging boundaries
-right.mark(boundaries, 1)
-left.mark(boundaries, 2)
+left.mark(boundaries, 1)
+right.mark(boundaries, 2)
 here.mark(boundaries, 3)
 there.mark(boundaries, 4)
-top.mark(boundaries, 5)
-bottom.mark(boundaries, 6)
+bottom.mark(boundaries, 5)
+top.mark(boundaries, 6)
 
 dsn = ds(subdomain_data=boundaries)
 
@@ -99,7 +96,7 @@ bc_top    = DirichletBC(W, w_top,    Top())
 bc_bottom = DirichletBC(W, w_bottom, Bottom())
 
 # Collecting boundaries
-bc = [bc_left, bc_right, bc_here, bc_there, bc_bottom, bc_top]
+bc = [bc_left] #, bc_right, bc_here, bc_there, bc_bottom, bc_top]
 
 # Define constitutive relations
 def epsilon(u):
