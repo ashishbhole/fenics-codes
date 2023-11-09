@@ -15,6 +15,8 @@ by B. E. Abali and F. A. Reich: Transformation from Voigt to Tensor notations.
 
 3) A way of applying poitwise boundary conditions is taken from this discussion:
 https://fenicsproject.discourse.group/t/boundary-conditions-on-edges-or-nodes/5000/5    
+
+4) https://cnam.hal.science/hal-03500725/document
 """
 
 from __future__ import print_function
@@ -50,8 +52,10 @@ i, j, k, l = ufl.indices(4)
 # Create mesh and define function space
 mesh = BoxMesh(Point(Xmin, Ymin, Zmin), Point(Xmax, Ymax, Zmax), N, N, N)
 
+print("Number of cells : ", mesh.num_cells())
+
 # Finite elements and FE function space
-degree = 2
+degree = 1
 VE = VectorElement("CG", mesh.ufl_cell(), degree=deg)
 PE = FiniteElement("CG", mesh.ufl_cell(), degree=deg)
 
@@ -149,6 +153,9 @@ p7 = point7()
 p8 = point8()
 
 dsn = ds(subdomain_data=boundaries)
+
+# Mark facets
+n = FacetNormal(mesh)
 
 # Dirichlet boundary conditions applied to faces
 w_top    = Constant((0.0, 0.0, 0.0, 0.0))
@@ -282,20 +289,29 @@ elif test_no == 5:
 
     bc = [bc13, bc23, bc33, bc43, bc12, bc22, bc52, bc62, bc11, bc41, bc51, bc81, bc1p ,bc2p, bc3p, bc4p]
     
+def matrix2vector(M):
+    return np.array([M[0,0], M[1,1], M[2,2], M[0,1], M[0,2], M[1,2]])
+
+def vector2matrix(v):
+    return np.array([[v[0], v[3], v[4]], [v[3], v[1], v[5]], [v[4], v[5], v[2]]])
+            
 # Define constitutive relations
 # Mechanical Strain and Stress tensors
 def epsilon(u):
-    return 0.5*(nabla_grad(u) + nabla_grad(u).T)
+    return as_vector(matrix2vector(0.5*(nabla_grad(u) + nabla_grad(u).T)))
 
 def sigma_u(u):
-    return as_tensor( mp.C[i,j,k,l] * epsilon(u)[k,l] , (i,j))
+    #return as_tensor( mp.C[i,j,k,l] * epsilon(u)[k,l] , (i,j))
+    return as_tensor( vector2matrix( as_vector( mp.elasticity_tensor[i,j] * epsilon(u)[j], (i) )) )
 
 # Piezoelectric/elecromechonical tensor
 def sigma_p(phi):
-    return as_tensor( ep.Ephi[k,i,j] * grad(phi)[k], (i,j))
+    #return as_tensor( ep.Ephi[j,k,i] * grad(phi)[i], (j,k))
+    return as_tensor( vector2matrix( as_vector( ep.piezoelectric_tensor.T[i,j] * grad(phi)[j], (i)) ))
 
 def edisp_u(u):
-    return as_tensor( ep.Ephi[i,k,l] * epsilon(u)[k,l], (i))
+    #return as_tensor( ep.Ephi[i,j,k] * epsilon(u)[j,k], (i))
+    return as_vector( ep.piezoelectric_tensor[i,j] * epsilon(u)[j], (i)) 
 
 # Electrostatic vector
 def edisp_p(phi):
@@ -306,7 +322,7 @@ def edisp_p(phi):
 (v, q)   = TestFunctions(W)
 
 # Body forces: source terms
-force = Constant((0, 0, 0)) # -mp.rho*9.8))
+force = Constant((0, 0, 0))
 # Charge: source term
 charge  = Constant(0)
 
@@ -318,8 +334,8 @@ traction_there  = Constant((0, 0, 0))
 traction_top    = Constant((0, 0, 0))
 traction_bottom = Constant((0, 0, 0))
 
-if test_no == 4: traction_top    = Constant((0, 0, -1))
-if test_no == 5: traction_right  = Constant((-1, 0, 0))
+if test_no == 4: traction_top    = Constant((0, 0, 1)) # be careful about signs
+if test_no == 5: traction_right  = Constant((1, 0, 0))
 
 # Voltage for boundary integrals
 gradphi_left   = Constant(0.0)
@@ -377,7 +393,8 @@ else:
     TVS = TensorFunctionSpace(mesh, "DG", 0)
 
 Ed = Function(VFS, name="Electrical_Displacement")
-q_vec = as_vector( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i)) - ep.dielectric_tensor * grad(phi)
+#q_vec = as_vector( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i)) - ep.dielectric_tensor * grad(phi)
+q_vec = as_vector( ep.piezoelectric_tensor[i,j] * epsilon(u)[j], (i) ) - ep.dielectric_tensor * grad(phi)
 Ed.assign(project(q_vec, VFS))
 File('solution/Electrical_Displacement.pvd') << Ed
 
@@ -387,5 +404,10 @@ Ep.assign(project(q_vec, VFS))
 File('solution/Electrical_Field.pvd') << Ep
 
 Ms = Function(TVS, name="Mechanical_Strain")
-Ms.assign(project(0.5*(nabla_grad(u) + nabla_grad(u).T), TVS))
+#Ms.assign(project(0.5*(nabla_grad(u) + nabla_grad(u).T), TVS))
+Ms.assign(project(as_tensor( vector2matrix( as_vector( epsilon(u)[i], (i) )) ) , TVS))
 File('solution/Mechanical_Strain.pvd') << Ms
+
+Ms = Function(TVS, name="Mechanical_Stress")
+Ms.assign(project(as_tensor( vector2matrix( as_vector( mp.elasticity_tensor[i,j] * epsilon(u)[j], (i) )) ), TVS) )
+File('solution/Mechanical_Stress.pvd') << Ms
