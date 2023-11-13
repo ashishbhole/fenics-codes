@@ -52,8 +52,6 @@ i, j, k, l = ufl.indices(4)
 # Create mesh and define function space
 mesh = BoxMesh(Point(Xmin, Ymin, Zmin), Point(Xmax, Ymax, Zmax), N, N, N)
 
-print("Number of cells : ", mesh.num_cells())
-
 # Finite elements and FE function space
 degree = 1
 VE = VectorElement("CG", mesh.ufl_cell(), degree=deg)
@@ -307,11 +305,11 @@ def sigma_u(u):
 # Piezoelectric/elecromechonical tensor
 def sigma_p(phi):
     #return as_tensor( ep.Ephi[j,k,i] * grad(phi)[i], (j,k))
-    return as_tensor( vector2matrix( as_vector( ep.piezoelectric_tensor.T[i,j] * grad(phi)[j], (i)) ))
+    return as_tensor( vector2matrix( as_vector( ep.piezoelectric_e_tensor.T[i,j] * grad(phi)[j], (i)) ))
 
 def edisp_u(u):
     #return as_tensor( ep.Ephi[i,j,k] * epsilon(u)[j,k], (i))
-    return as_vector( ep.piezoelectric_tensor[i,j] * epsilon(u)[j], (i)) 
+    return as_vector( ep.piezoelectric_e_tensor[i,j] * epsilon(u)[j], (i)) 
 
 # Electrostatic vector
 def edisp_p(phi):
@@ -334,8 +332,8 @@ traction_there  = Constant((0, 0, 0))
 traction_top    = Constant((0, 0, 0))
 traction_bottom = Constant((0, 0, 0))
 
-if test_no == 4: traction_top    = Constant((0, 0, 1)) # be careful about signs
-if test_no == 5: traction_right  = Constant((1, 0, 0))
+if test_no == 4: traction_top    = Constant((0, 0, -1)) # be careful about signs
+if test_no == 5: traction_right  = Constant((-1, 0, 0))
 
 # Voltage for boundary integrals
 gradphi_left   = Constant(0.0)
@@ -394,7 +392,7 @@ else:
 
 Ed = Function(VFS, name="Electrical_Displacement")
 #q_vec = as_vector( ep.Ephi[i,k,l] * nabla_grad(u)[k,l], (i)) - ep.dielectric_tensor * grad(phi)
-q_vec = as_vector( ep.piezoelectric_tensor[i,j] * epsilon(u)[j], (i) ) - ep.dielectric_tensor * grad(phi)
+q_vec = as_vector( ep.piezoelectric_e_tensor[i,j] * epsilon(u)[j], (i) ) - ep.dielectric_tensor * grad(phi)
 Ed.assign(project(q_vec, VFS))
 File('solution/Electrical_Displacement.pvd') << Ed
 
