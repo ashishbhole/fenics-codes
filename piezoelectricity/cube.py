@@ -332,8 +332,8 @@ traction_there  = Constant((0, 0, 0))
 traction_top    = Constant((0, 0, 0))
 traction_bottom = Constant((0, 0, 0))
 
-if test_no == 4: traction_top    = Constant((0, 0, -1)) # be careful about signs
-if test_no == 5: traction_right  = Constant((-1, 0, 0))
+if test_no == 4: traction_top    = Constant((0, 0, 1)) # be careful about signs
+if test_no == 5: traction_right  = Constant((1, 0, 0))
 
 # Voltage for boundary integrals
 gradphi_left   = Constant(0.0)
